@@ -6,28 +6,38 @@ st.set_page_config(page_title="Patching Report Dashboard", layout="wide")
 
 st.title("Patching Report Dashboard")
 
-st.write("Upload a patching CSV file to view, search, filter, and visualize patch data.")
+st.write("Upload one or more patching CSV files to view, search, filter, and visualize patch data.")
 
-uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+uploaded_files = st.file_uploader(
+    "Upload CSV file(s)",
+    type=["csv"],
+    accept_multiple_files=True
+)
 
-if uploaded_file:
-    # Read CSV with no headers because your file format looks custom
-    df = pd.read_csv(uploaded_file, header=None)
+if uploaded_files:
+    all_data = []
 
-    # Rename columns based on expected format
-    df.columns = [
-        "hostname",
-        "package_info",
-        "day_of_week",
-        "day",
-        "month",
-        "year",
-        "time",
-        "am_pm",
-        "timezone"
-    ]
+    for uploaded_file in uploaded_files:
+        df = pd.read_csv(uploaded_file, header=None)
 
-    # Create readable installed date column
+        df.columns = [
+            "hostname",
+            "package_info",
+            "day_of_week",
+            "day",
+            "month",
+            "year",
+            "time",
+            "am_pm",
+            "timezone"
+        ]
+
+        df["source_file"] = uploaded_file.name
+
+        all_data.append(df)
+
+    df = pd.concat(all_data, ignore_index=True)
+
     df["installed_date"] = (
         df["day_of_week"].astype(str) + " " +
         df["month"].astype(str) + " " +
@@ -37,8 +47,6 @@ if uploaded_file:
         df["am_pm"].astype(str)
     )
 
-    # Try to split package_info into useful parts
-    # Example: package-version.OS.architecture
     df["package_name"] = df["package_info"].astype(str).str.split("-").str[0]
     df["package_version"] = df["package_info"].astype(str).str.split("-").str[1]
 
@@ -57,6 +65,11 @@ if uploaded_file:
         options=sorted(df["package_name"].dropna().unique())
     )
 
+    file_filter = st.sidebar.multiselect(
+        "Filter by source file",
+        options=sorted(df["source_file"].dropna().unique())
+    )
+
     filtered_df = df.copy()
 
     if hostname_filter:
@@ -64,6 +77,9 @@ if uploaded_file:
 
     if package_filter:
         filtered_df = filtered_df[filtered_df["package_name"].isin(package_filter)]
+
+    if file_filter:
+        filtered_df = filtered_df[filtered_df["source_file"].isin(file_filter)]
 
     st.subheader("Filtered Results")
     st.dataframe(filtered_df, use_container_width=True)
@@ -118,4 +134,4 @@ if uploaded_file:
     st.plotly_chart(fig2, use_container_width=True)
 
 else:
-    st.info("Please upload a CSV file to begin.")
+    st.info("Please upload one or more CSV files to begin.")
